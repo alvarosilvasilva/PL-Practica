@@ -31,3 +31,14 @@ eval sumatoria 5 ;;
 
 /*hola*/
 
+
+
+#errores
+
+pred(0);;
+
+isZero(isZero(0));;
+
+x:Nat = 3.0;;
+
+

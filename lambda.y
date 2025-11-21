@@ -50,8 +50,8 @@ void agregar_arg(char* nombre) {
 }
 
 /* --- TOKENS --- */
-%token <sval> ID NUMBER FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED ISZERO
-%token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN
+%token <sval> ID FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED ISZERO
+%token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON 
 %token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
 /* --- TIPOS DE NO-TERMINALES --- */
@@ -114,6 +114,11 @@ definicion:
 definicion_var:
     ID COLON tipo ASSIGN expresion SEMICOLON
     {
+        if (strcmp($3, "Nat") == 0 && strchr($5, '.') != NULL) {
+            fprintf(stderr, "Error de Tipos: Asignacion de decimal a Nat en variable '%s'.\n", $1);
+            YYABORT;
+        }
+        
         printf("%s = %s\n\n", $1, $5); 
     }
     ;
@@ -175,6 +180,7 @@ expresion:
     /* ASIGNACIÓN EN LÍNEA (WALRUS :=) */
     | ID COLON tipo ASSIGN expresion 
     {
+        
         $$ = unir3("(", unir3($1, " := ", $5), ")");
     }
     ;
@@ -195,10 +201,18 @@ termino:
     }
     | PRED LPAREN expresion RPAREN 
     {
+        if(strcmp($3, "0")==0){
+            fprintf(stderr, "Error: PRED no puede aplicarse a 0 (Linea %d)\n", yylineno);
+            YYABORT;
+        }
         $$ = unir3("(", unir3($3, " - ", "1"), ")");
     }
     | ISZERO LPAREN expresion RPAREN
     {
+        if (strstr($3, "==") != NULL) {
+            fprintf(stderr, "Error de Tipos: isZero espera un Numero, pero recibió una expresión Booleana (Linea %d)\n", yylineno);
+            YYABORT;
+        }
         $$ = unir3("(", unir3($3, " == ", "0"), ")");
     }
     ; 
