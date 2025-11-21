@@ -31,6 +31,10 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 "Bool"          { yylval.sval = strdup(yytext); return TYPE_BOOL; }
 "succ"          { return SUCC;}
 "pred"          { return PRED;}
+"isZero"        {return ISZERO;}
+"if"             { return IF;}
+"then"           { return THEN;}
+"else"           { return ELSE;}
 
 
 "lambda."        { return LAMBDA; }  

@@ -51,12 +51,12 @@ void agregar_arg(char* nombre) {
 }
 
 /* --- TOKENS (Deben coincidir con tu lexer) --- */
-%token <sval> ID NUMBER FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED
+%token <sval> ID NUMBER FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED ISZERO
 %token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN
-%token LPAREN RPAREN PLUS MINUS MULT DIV 
+%token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
 /* --- TIPOS DE NO-TERMINALES --- */
-%type <sval> tipo expresion termino cuerpo_lambda 
+%type <sval> tipo expresion termino cuerpo_lambda  ifelse
 
 /* --- PRECEDENCIA --- */
 %right ARROW
@@ -83,6 +83,10 @@ sentencia:
     definicion
     | evaluacion
     | definicion_var
+    | expresion SEMICOLON 
+    {
+        printf("print(%s)\n", $1);
+    }
     ;
 
 /* --- DEFINICIÓN (Traducción a Python) --- */
@@ -149,9 +153,18 @@ evaluacion:
     }
     ;
 
+ifelse: 
+    IF expresion THEN expresion ELSE expresion 
+    {
+        /* Traducción a Python: $4 (THEN) if $2 (IF) else $6 (ELSE) */
+        $$ = unir3($4, " if ", unir3(unir($2,":"), unir(" else ",":"), $6));
+
+        printf("(%s)\n", $$);
+    }
 /* --- EXPRESIONES MATEMÁTICAS --- */
 expresion:
     termino                     { $$ = $1; }
+    | ifelse                    { $$ = $1; }
     /* Usamos la funcion unir3 para crear el string "A + B" */
     | expresion PLUS expresion  { $$ = unir3($1, " + ", $3); }
     | expresion MINUS expresion { $$ = unir3($1, " - ", $3); }
@@ -165,6 +178,8 @@ expresion:
         $$ = unir(temp2, ")");
         /* Resultado: string "f(x)" */
     }
+    
+
     ;
 
 termino:
@@ -172,20 +187,27 @@ termino:
     | INT_LIT                   { $$ = $1; }
     | FLOAT_LIT                 { $$ = $1; }
     | LPAREN expresion RPAREN   { $$ = unir3("(", $2, ")"); }
-    | SUCC LPAREN expresion RPAREN
+    
+    // CORRECCIÓN: Eliminar el SEMICOLON final
+    | SUCC LPAREN expresion RPAREN 
     {
         /* Translates SUCC(exp) to (exp + 1) */
         $$ = unir3("(", unir3($3, " + ", "1"), ")");
     }
     
-
-    | PRED LPAREN expresion RPAREN
+    // CORRECCIÓN: Eliminar el SEMICOLON final
+    | PRED LPAREN expresion RPAREN 
     {
         /* Translates PRED(exp) to (exp - 1) */
         $$ = unir3("(", unir3($3, " - ", "1"), ")");
     }
-    ;
-    ;
+
+    | ISZERO LPAREN expresion RPAREN
+    {
+        /* Translates ISZERO(exp) to (exp == 0) */
+        $$ = unir3("(", unir3($3, " == ", "0"), ")");
+    }
+    ; 
 
 /* --- TIPOS (Solo validación sintáctica) --- */
 tipo:

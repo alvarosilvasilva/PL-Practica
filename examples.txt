@@ -4,5 +4,8 @@ eval suma 3;;
 
 x:Nat = 3 ;;
 
-succ ( 0 );;
+pred(succ(x)) + succ(0);;
 
+isZero(succ(1));;
+
+if succ(0) then 1 else 2;;
