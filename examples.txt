@@ -1,16 +1,33 @@
-def suma = lambda.y:Nat. y + 1 ;;
+eval succ(pred(succ(00))) ;;
+eval isZero(pred(1)) ;;
 
-eval suma 3;;
+if isZero(0) then 100 else 200 ;;
 
-x:Nat = 3 ;;
 
-pred(succ(x)) + succ(0);;
+if isZero(5) then 0 else if isZero(pred(1)) then 1 else 2 ;;
 
-isZero(succ(1));;
 
-def factorial = lambda.n:Nat. if isZero(n) then 1 else (n * factorial(pred(n))) ;;
+if isZero(10 - 10) then succ(9) else pred(5) ;;
 
-eval factorial 5;;
+def identidad = lambda.x:Nat. x ;;
+eval identidad 5 ;;
 
-if succ(0) then if isZero(0) then r:Nat = 1 else 1 else 3;;
+def siempreDiez = lambda.x:Nat. 10 ;;
+eval siempreDiez 99 ;;
+
+def fib = lambda.n:Nat. 
+    if isZero(n) 
+    then 0 
+    else if isZero(pred(n)) 
+         then 1 
+         else fib(pred(n)) + fib(pred(pred(n))) ;;
+
+eval fib 10 ;;
+
+def sumatoria = lambda.n:Nat. 
+    if isZero(n) then 0 else n + sumatoria(pred(n)) ;;
+
+eval sumatoria 5 ;;
+
+/*hola*/
 

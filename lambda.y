@@ -2,10 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
+/* --- VARIABLES GLOBALES --- */
 char* lista_argumentos[100];
 int contador_args = 0;
-bool ifelse = false;
 
 extern int yylineno;
 extern int yylex();
@@ -53,8 +54,8 @@ void agregar_arg(char* nombre) {
 %token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN
 %token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
-/* --- TIPOS --- */
-%type <sval> tipo expresion termino cuerpo_lambda ifelse
+/* --- TIPOS DE NO-TERMINALES --- */
+%type <sval> tipo expresion termino cuerpo_lambda ifelse funcion_anonima
 
 /* --- PRECEDENCIA --- */
 %right ARROW
@@ -81,12 +82,11 @@ sentencia:
     definicion
     | evaluacion
     | definicion_var
-    /* Regla para expresiones sueltas (IFs, sumas, etc.) terminadas en ;; */
+    /* Regla para expresiones sueltas (incluyendo IFs sueltos) */
+    /* Aquí es el único lugar donde imprimimos expresiones que no son definiciones */
     | expresion SEMICOLON 
     {   
-        if(ifelse=false){
-            printf("print(%s)\n", $1);
-        }
+        printf("print(%s)\n", $1);
     }
     ;
 
@@ -110,7 +110,7 @@ definicion:
     }
     ;
 
-/* --- ASIGNACIÓN GLOBAL (Variable estática) --- */
+/* --- ASIGNACIÓN GLOBAL --- */
 definicion_var:
     ID COLON tipo ASSIGN expresion SEMICOLON
     {
@@ -118,6 +118,7 @@ definicion_var:
     }
     ;
 
+/* --- CUERPO DE DEFINICIONES --- */
 cuerpo_lambda:
     LAMBDA ID COLON tipo DOT cuerpo_lambda { agregar_arg($2); $$ = $6; }
     | expresion { $$ = $1; }
@@ -130,16 +131,30 @@ evaluacion:
     }
     ;
 
-/* --- CONDICIONAL TERNARIO (ANIDABLE) --- */
+/* --- CONDICIONAL TERNARIO --- */
+/* IMPORTANTE: Esto devuelve un string, NO imprime nada.
+   Usa 'expresion' en las ramas, no 'sentencia'. */
 ifelse: 
     IF expresion THEN expresion ELSE expresion 
     {
-        ifelse = true;
         $$ = unir3("(", unir3($4, " if ", unir3($2, " else ", $6)), ")");
+    }
+    ;
 
-        printf("%s", $4);
-        printf("if(%s)", $2);
-        printf(" else(%s)\n", $6);
+/* --- FUNCIONES ANÓNIMAS (LAMBDAS EN LÍNEA) --- */
+/* Permite usar lambda dentro de un IF o asignación */
+funcion_anonima:
+    /* Coincide con: lambda.x:Nat. cuerpo */
+    LAMBDA ID COLON tipo DOT expresion
+    {
+        /* Traduce a Python: (lambda x: cuerpo) */
+        char* cabecera = $2;
+        char* cuerpo = unir(":=", $6);
+        
+        /* Paréntesis importantes para proteger la precedencia */
+        $$ = unir3("(", unir(cabecera, cuerpo), ")");
+        
+        free(cabecera); free(cuerpo);
     }
     ;
 
@@ -151,18 +166,13 @@ expresion:
     | expresion MULT expresion  { $$ = unir3($1, " * ", $3); }
     | expresion DIV expresion   { $$ = unir3($1, " / ", $3); }
     
-    /* Aplicación de función */
     | expresion termino         { 
         $$ = unir3(unir($1, "("), $2, ")");
     }
     
-    /* Condicional */
     | ifelse                    { $$ = $1; }
 
-    /* NUEVA REGLA: Asignación en línea (Expresión Walrus) 
-       Permite: if ... then x:Nat = 1 else ...
-       Traducción: (x := 1)
-    */
+    /* ASIGNACIÓN EN LÍNEA (WALRUS :=) */
     | ID COLON tipo ASSIGN expresion 
     {
         $$ = unir3("(", unir3($1, " := ", $5), ")");
@@ -175,6 +185,9 @@ termino:
     | FLOAT_LIT                 { $$ = $1; }
     | LPAREN expresion RPAREN   { $$ = unir3("(", $2, ")"); }
     
+    /* Añadimos funciones anónimas como término válido */
+    | funcion_anonima           { $$ = $1; }
+
     /* Funciones primitivas */
     | SUCC LPAREN expresion RPAREN 
     {
