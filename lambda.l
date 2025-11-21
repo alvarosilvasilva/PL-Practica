@@ -29,7 +29,8 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 "Nat"           { yylval.sval = strdup(yytext); return TYPE_INT; }
 "Float"         { yylval.sval =strdup(yytext); return TYPE_FLOAT; }
 "Bool"          { yylval.sval = strdup(yytext); return TYPE_BOOL; }
-
+"succ"          { return SUCC;}
+"pred"          { return PRED;}
 
 
 "lambda."        { return LAMBDA; }  

@@ -3,23 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* --- VARIABLES GLOBALES PARA LA DES-CURRIFICACIÓN --- */
-/* Usaremos un array estático simple para guardar los argumentos.
-   Es suficiente para una práctica universitaria. */
 char* lista_argumentos[100];
 int contador_args = 0;
 
-/* Declaraciones externas de Flex */
 extern int yylineno;
 extern int yylex();
 extern char* yytext;
 void yyerror(const char *s);
 
-/* --- FUNCIONES AUXILIARES DE C --- */
 
-/* Función para concatenar dos strings creando uno nuevo en memoria */
 char* unir(const char* s1, const char* s2) {
-    /* +1 para el terminador nulo */
     char* resultado = malloc(strlen(s1) + strlen(s2) + 1); 
     if (resultado == NULL) { fprintf(stderr, "Error de memoria\n"); exit(1); }
     strcpy(resultado, s1);
@@ -27,7 +20,7 @@ char* unir(const char* s1, const char* s2) {
     return resultado;
 }
 
-/* Función auxiliar para unir 3 partes (muy útil para operaciones a + b) */
+
 char* unir3(const char* s1, const char* s2, const char* s3) {
     char* resultado = malloc(strlen(s1) + strlen(s2) + strlen(s3) + 1);
     if (resultado == NULL) { fprintf(stderr, "Error de memoria\n"); exit(1); }
@@ -58,12 +51,12 @@ void agregar_arg(char* nombre) {
 }
 
 /* --- TOKENS (Deben coincidir con tu lexer) --- */
-%token <sval> ID NUMBER FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL
+%token <sval> ID NUMBER FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED
 %token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN
-%token LPAREN RPAREN PLUS MINUS MULT DIV
+%token LPAREN RPAREN PLUS MINUS MULT DIV 
 
 /* --- TIPOS DE NO-TERMINALES --- */
-%type <sval> tipo expresion termino cuerpo_lambda
+%type <sval> tipo expresion termino cuerpo_lambda 
 
 /* --- PRECEDENCIA --- */
 %right ARROW
@@ -89,6 +82,7 @@ lista_sentencias:
 sentencia:
     definicion
     | evaluacion
+    | definicion_var
     ;
 
 /* --- DEFINICIÓN (Traducción a Python) --- */
@@ -99,14 +93,10 @@ definicion:
         printf("# Funcion generada desde Lambda Calculo\n");
         
         if (contador_args > 0) {
-            /* Imprimir: def nombre( */
+            
             printf("def %s(", $2);
             
-            /* Imprimir argumentos. 
-               NOTA: Como la recursividad en Bison va de abajo a arriba,
-               los argumentos se guardan en orden inverso (el último se procesa primero).
-               Por eso recorremos el array al revés: de (contador-1) a 0. 
-            */
+    
             for (int i = contador_args - 1; i >= 0; i--) {
                 printf("%s", lista_argumentos[i]);
                 if (i > 0) printf(", "); /* Coma si no es el último */
@@ -122,6 +112,15 @@ definicion:
         
         /* Liberar memoria de strings temporales sería ideal aquí, pero en prácticas
            se suele omitir para simplificar, ya que el SO limpia al terminar. */
+    }
+    ;
+
+definicion_var:
+    ID COLON tipo ASSIGN expresion SEMICOLON
+    {
+        printf("%s = %s\n\n", $1, $5); 
+        
+
     }
     ;
 
@@ -173,11 +172,25 @@ termino:
     | INT_LIT                   { $$ = $1; }
     | FLOAT_LIT                 { $$ = $1; }
     | LPAREN expresion RPAREN   { $$ = unir3("(", $2, ")"); }
+    | SUCC LPAREN expresion RPAREN
+    {
+        /* Translates SUCC(exp) to (exp + 1) */
+        $$ = unir3("(", unir3($3, " + ", "1"), ")");
+    }
+    
+
+    | PRED LPAREN expresion RPAREN
+    {
+        /* Translates PRED(exp) to (exp - 1) */
+        $$ = unir3("(", unir3($3, " - ", "1"), ")");
+    }
+    ;
     ;
 
 /* --- TIPOS (Solo validación sintáctica) --- */
 tipo:
     TYPE_INT                    { $$ = $1; }
+    | TYPE_BOOL                 { $$ = $1; }
     | TYPE_FLOAT                { $$ = $1; }
     | LPAREN tipo RPAREN        { $$ = $2; }
     | tipo ARROW tipo           { $$ = unir3($1, " -> ", $3); }
