@@ -25,6 +25,30 @@ comentarios mal escritos
 no reconocido por el lexico
 6t&
 
+let mal formado falta tipo 
+let x 
+
+let mal formado falta assignacion 
+let :Nat = 
+
+let :Nat = x 
+if pero falta el else
+if 1 then 2
+
+if solo 
+if 1
+
+lambda mal formado 
+lambda x:Nat;;
+
+def mal formado 
+def 3 
+
+eval mal formado 
+eval
+
+solo un parentesis 
+(8
 
 
 

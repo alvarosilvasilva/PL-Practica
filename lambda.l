@@ -1,7 +1,7 @@
 %{
 #include <string.h>
 #include <stdlib.h>
-#include "lambda.tab.h" /* Tokens generados por Bison */
+#include "lambda.tab.h"
 
 extern int yylineno; 
 void yyerror(const char *s);
@@ -43,7 +43,6 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 "else"          { return ELSE;}
 
 "lambda."       { return LAMBDA; }  
-"->"            { return ARROW; }
 ":"             { return COLON; }
 "."             { return DOT; }
 "="             { return ASSIGN; }
