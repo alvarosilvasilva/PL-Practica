@@ -61,9 +61,9 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 {ENTERO}        { yylval.sval = strdup(yytext); return INT_LIT; }
 {ID}            { yylval.sval = strdup(yytext); return ID; }
 
-"-"{ENTERO}               { fprintf(stderr,"No se permiten enteros negativos \n",yylineno,yytext); exit(1);}
+"-"{ENTERO}               { fprintf(stderr,"No se permiten enteros negativos \n"); exit(1);}
 
-"-"{ENTERO}               { fprintf(stderr,"No se permiten decimales negativos \n",yylineno,yytext); exit(1);}
+"-"{ENTERO}               { fprintf(stderr,"No se permiten decimales negativos \n"); exit(1);}
 
 
 "#"               { fprintf(stderr,"Error lexico en linea %d: El comentario '%s'se hace con /* \n",yylineno,yytext); exit(1);}

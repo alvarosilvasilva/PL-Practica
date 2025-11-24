@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <strings.h> /* Necesario para strcasecmp en Linux */
+#include <ctype.h>
 
 /* --- VARIABLES GLOBALES --- */
 char* lista_argumentos[100];
@@ -55,9 +57,9 @@ void agregar_arg(char* nombre) {
 %token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN COMMA
 %token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
-%type <sval> tipo expresion termino cuerpo_lambda ifelse funcion_anonima let_exp
+%type <sval> tipo expresion termino cuerpo_lambda ifelse funcion_anonima let_exp parametro lista_parametros
 
-/* PRECEDENCIA */
+/* PRECEDENCIA Y ASOCIATIVIDAD */
 %right ARROW
 %nonassoc LET IN IF THEN ELSE 
 %left PLUS MINUS
@@ -65,6 +67,10 @@ void agregar_arg(char* nombre) {
 %left LPAREN RPAREN
 
 %%
+
+/* ========================================================================== */
+/* GRAMÁTICA PRINCIPAL                                                        */
+/* ========================================================================== */
 
 programa: lista_sentencias ;
 
@@ -74,15 +80,28 @@ sentencia:
     definicion
     | evaluacion
     | definicion_var
-    | expresion SEMICOLON { printf("%s\n", $1); free($1); }
+    | expresion SEMICOLON { 
+        if ($1 != NULL) {
+            printf("%s\n", $1); 
+            free($1); 
+        }
+    }
+    
+    /* Error Sintáctico General: Basura suelta antes de un punto y coma */
+    | error SEMICOLON 
+    { 
+        yyerrok; 
+        YYABORT; /* Paramos para evitar problemas de memoria */
+    }
     ;
 
-/* Argumentos */
+/* Argumentos para funciones estilo C/Python */
 parametro: ID COLON tipo { agregar_arg($1); } ;
 lista_parametros: parametro | parametro COMMA lista_parametros ;
 
+/* --- DEFINICIONES DE FUNCIONES --- */
 definicion:
-    /* Estilo Lambda Clasico: def f = lambda x... */
+    /* 1. Estilo Lambda: def f = lambda x... */
     DEF ID ASSIGN cuerpo_lambda SEMICOLON
     {
         if (contador_args > 0) {
@@ -99,7 +118,7 @@ definicion:
         }
         limpiar_args(); 
     }
-    /* Estilo C/Python: def f(x:T) = ... */
+    /* 2. Estilo Python: def f(x:T) = ... */
     | DEF ID LPAREN { limpiar_args(); } lista_parametros RPAREN ASSIGN expresion SEMICOLON
     {
         printf("def %s(", $2);
@@ -110,32 +129,35 @@ definicion:
         printf("):\n    return %s\n\n", $8);
         free($8);
     }
+    
+    /* ERROR SINTÁCTICO: Definición rota */
+    | DEF ID error SEMICOLON
+    {
+        fprintf(stderr, "Error Sintactico: Definicion de funcion mal formada. Falta '=' o el cuerpo de la funcion (Linea %d)\n", yylineno);
+        limpiar_args();
+        YYABORT; /* IMPORTANTE: Parar ejecución */
+    }
     ;
 
-/* REGLA CORREGIDA Y UNIFICADA */
+/* --- DEFINICIÓN DE VARIABLES GLOBALES (Con Chequeo de Tipos) --- */
 definicion_var:
     ID COLON TYPE_INT ASSIGN expresion SEMICOLON
     {
-        
-
         if (strchr($5, '.') != NULL) {
             fprintf(stderr, "Error de Tipos: Asignación de Float a Nat en '%s' (Linea %d)\n", $1, yylineno);
-            YYERROR;
+            YYABORT;
         }
-
-        if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0) {
-            fprintf(stderr, "Error de Tipos: Asignación de Booleano (True/False) a Nat en '%s' (Linea %d)\n", $1, yylineno);
-            YYERROR;
+        if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0 || strstr($5, "==") != NULL) {
+            fprintf(stderr, "Error de Tipos: Asignación de Booleano a Nat en '%s' (Linea %d)\n", yylineno);
+            YYABORT;
         }
-        
         printf("%s = %s\n\n", $1, $5); 
-        
     }
     | ID COLON TYPE_FLOAT ASSIGN expresion SEMICOLON
     {
         if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0 || strstr($5, "==") != NULL) {
              fprintf(stderr, "Error de Tipos: Asignación de Booleano a Float en '%s' (Linea %d).\n", $1, yylineno);
-             YYERROR;
+             YYABORT;
         }
         printf("%s = %s\n\n", $1, $5);
     }
@@ -143,41 +165,93 @@ definicion_var:
     {
         if (strstr($5, "==") == NULL && strcasecmp($5, "True") != 0 && strcasecmp($5, "False") != 0) {
             fprintf(stderr, "Error de Tipos: Asignacion de No Booleano a Bool en variable '%s' (Linea %d).\n", $1, yylineno);
-            YYERROR;
+            YYABORT;
         }
-        
         printf("%s = %s\n\n", $1, $5);
     }
     ;
 
+/* --- CUERPO DE LAMBDA (RECURSIVO) --- */
 cuerpo_lambda:
     LAMBDA ID COLON tipo DOT cuerpo_lambda { agregar_arg($2); $$ = $6; }
     | expresion { $$ = $1; }
     ;
 
+/* --- EVALUACIÓN --- */
 evaluacion:
     EVAL expresion SEMICOLON { printf("%s\n", $2); free($2); }
-    ;
-
-ifelse: 
-    IF expresion THEN expresion ELSE expresion 
-    { $$ = concat(7, "(", $4, " if ", $2, " else ",$6, ")"); }
-    ;
-
-let_exp:
-    LET ID COLON tipo ASSIGN expresion IN expresion
+    
+    /* ERROR SINTÁCTICO: Eval incompleto */
+    | EVAL error SEMICOLON
     {
-        /* (lambda id: body)(val) */
-
-        $$ = concat(6, $2 , "=", $6, "\n", $8, "\n");
+        fprintf(stderr, "Error Sintactico: Instruccion 'eval' mal formada o expresion invalida (Linea %d)\n", yylineno);
+        YYABORT;
     }
     ;
 
-funcion_anonima:
-    LAMBDA ID COLON tipo DOT expresion
-    { $$ = concat(5, "(lambda ", $2, ": ", $6, ")"); }
+/* --- CONDICIONAL IF-ELSE --- */
+ifelse: 
+    /* Caso Correcto */
+    IF expresion THEN expresion ELSE expresion 
+    { $$ = concat(7, "(", $4, " if ", $2, " else ",$6, ")"); }
+    
+    /* ERROR SINTÁCTICO: Falta el ELSE */
+    | IF expresion THEN expresion error 
+    {
+        fprintf(stderr, "Error Sintactico: Estructura 'if' incompleta. Falta la rama 'else' (Linea %d)\n", yylineno);
+        YYABORT;
+    }
+    
+    /* ERROR SINTÁCTICO: Falta el THEN */
+    | IF expresion error
+    {
+        fprintf(stderr, "Error Sintactico: Estructura 'if' mal formada. Falta 'then' o la condicion es invalida (Linea %d)\n", yylineno);
+        YYABORT;
+    }
     ;
 
+/* --- EXPRESIÓN LET --- */
+let_exp:
+    /* Caso Correcto */
+    LET ID COLON tipo ASSIGN expresion IN expresion
+    {
+        $$ = concat(6, "(", $2 , " := ", $6, "; ", $8, ")");
+    }
+    
+    /* ERRORES SINTÁCTICOS DEL LET */
+    /* Usamos YYABORT para evitar que $$ quede con basura y cause Segmentation Fault arriba */
+    | LET ID error 
+    {
+        fprintf(stderr, "Error Sintactico: 'let' incompleto. Falta ': Tipo' tras '%s' (Linea %d)\n", $2, yylineno);
+        YYABORT; 
+    }
+    | LET ID COLON tipo error
+    {
+        fprintf(stderr, "Error Sintactico: 'let' incompleto. Falta '=' despues del tipo (Linea %d)\n", yylineno);
+        YYABORT;
+    }
+    | LET ID COLON tipo ASSIGN expresion error
+    {
+        fprintf(stderr, "Error Sintactico: 'let' incompleto. Falta 'in' o el cuerpo final (Linea %d)\n", yylineno);
+        YYABORT;
+    }
+    ;
+
+/* --- FUNCIONES ANÓNIMAS --- */
+funcion_anonima:
+    /* Caso Correcto */
+    LAMBDA ID COLON tipo DOT expresion
+    { $$ = concat(5, "(lambda ", $2, ": ", $6, ")"); }
+    
+    /* ERROR SINTÁCTICO: Falta el punto */
+    | LAMBDA ID COLON tipo error
+    {
+        fprintf(stderr, "Error Sintactico: Lambda mal formada. Falta el punto '.' despues del tipo (Linea %d)\n", yylineno);
+        YYABORT;
+    }
+    ;
+
+/* --- EXPRESIONES Y TÉRMINOS --- */
 expresion:
     termino  
     | termino COLON tipo { $$ = $1; }
@@ -187,7 +261,7 @@ expresion:
     | expresion DIV expresion { 
         if(strcmp($3, "0") == 0 || strcmp($3, "0.0") == 0) {
             fprintf(stderr, "Error de Ejecución: División por cero (Linea %d)\n", yylineno);
-            YYERROR;
+            YYABORT;
         }
         $$ = unir3($1, " / ", $3); }
     | expresion termino { $$ = concat(4, $1, "(", $2, ")"); }
@@ -199,37 +273,46 @@ termino:
     ID { $$ = $1; }
     | INT_LIT { $$ = $1; }
     | FLOAT_LIT { $$ = $1; }
+    
+    /* Caso Correcto Paréntesis */
     | LPAREN expresion RPAREN { $$ = concat(3, "(", $2, ")"); }
+    
+    /* ERROR SINTÁCTICO: Falta cerrar paréntesis */
+    | LPAREN expresion error
+    {
+        fprintf(stderr, "Error Sintactico: Falta el parentesis de cierre ')' (Linea %d)\n", yylineno);
+        YYABORT;
+    }
+
     | funcion_anonima { $$ = $1; }
+    
+    /* Primitivas con Chequeo de Tipos */
     | SUCC LPAREN expresion RPAREN { $$ = concat(3, "(", $3, " + 1)"); }
     
     | PRED LPAREN expresion RPAREN { 
         if (strchr($3, '.') != NULL) {
             fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Float (Linea %d)\n", yylineno);
-            YYERROR;
+            YYABORT;
         }
-        if (strcmp($3, "True") == 0 || strcmp($3, "False") == 0) {
+        if (strcasecmp($3, "True") == 0 || strcasecmp($3, "False") == 0 || strstr($3, "==") != NULL) {
             fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Bool (Linea %d)\n", yylineno);
-            YYERROR;
+            YYABORT;
         }
-
         if (strcmp($3, "0") == 0) {
-           $$ = concat(3, "(", $3, " )");
-        }else{
-            $$ = concat(3, "(", $3, " - 1)");
+           fprintf(stderr, "Error Semantico: PRED no puede aplicarse a 0 (Linea %d)\n", yylineno);
+           YYABORT;
         }
-       
+        $$ = concat(3, "(", $3, " - 1)");
     }
 
     | ISZERO LPAREN expresion RPAREN {
         if (strchr($3, '.') != NULL) {
             fprintf(stderr, "Error de Tipos: isZero no puede aplicarse a un Float (Linea %d)\n", yylineno);
-            YYERROR;
+            YYABORT;
         }
-        /* isZero no tiene sentido en booleanos */
-        if (strcmp($3, "True") == 0 || strcmp($3, "False") == 0) {
+        if (strcasecmp($3, "True") == 0 || strcasecmp($3, "False") == 0 || strstr($3, "==") != NULL) {
             fprintf(stderr, "Error de Tipos: isZero no puede aplicarse a un Bool (Linea %d)\n", yylineno);
-            YYERROR;
+            YYABORT;
         }
         $$ = concat(3, "(", $3, " == 0)"); 
     }
@@ -243,13 +326,11 @@ tipo:
 
 %%
 
-/* --- CÓDIGO C --- */
-
 extern FILE *yyin;
 
 void yyerror(const char *s) {
-    fprintf(stderr, "Error sintactico en linea %d: %s antes del token '%s'\n", 
-            yylineno, s, yytext);
+    /* Imprime el error estándar de Bison solo si no hemos impreso uno personalizado nosotros antes */
+    fprintf(stderr, "Error de analisis (Bison) en linea %d: %s antes de '%s'\n", yylineno, s, yytext);
 }
 
 int main(int argc, char **argv) {
