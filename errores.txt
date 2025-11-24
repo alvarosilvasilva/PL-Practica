@@ -1,0 +1,25 @@
+isZero no puede recibir algo que no sea un Nat--> 1
+
+Pred de cero no existe --> 1
+
+Pred no puede recibir algo que no sea un Nat --> 1
+
+Succ no puede recibir algo que no sea un Nat --> 1 
+
+x:Nat = 3.0 no puede ser un Float/Bool --> 1
+
+x:Float = 3 no puede ser un Nat/Bool --> 1
+
+x:Bool = 3 no puede ser un Nat ni Float/Nat --> 1
+
+no se puede definir negativos --> 1
+
+succ y pred no pueden tener negativos --> 1
+
+
+
+
+
+
+
+

@@ -1,15 +1,13 @@
 %{
 #include <string.h>
 #include <stdlib.h>
-#include "lambda.tab.h"
+#include "lambda.tab.h" /* Tokens generados por Bison */
 
 extern int yylineno; 
 void yyerror(const char *s);
 %}
 
 %option yylineno
-
-
 %x COMENTARIO
 
 DIGITO      [0-9]
@@ -20,28 +18,20 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 
 %%
 
-  
-"#"[^\n]* ; 
 
 
-    
 "/*"            { BEGIN(COMENTARIO); printf("# "); }
-
-    
 <COMENTARIO>\n  { printf("\n# "); }
-
-    
 <COMENTARIO>.   { printf("%s", yytext); }
-
-    
 <COMENTARIO>"*/" { BEGIN(INITIAL); printf("\n"); }
-
-
 
 [ \t\r\n]+      ; 
 
+
 "def"           { return DEF; }
 "eval"          { return EVAL; }
+"let"           { return LET; }
+"in"            { return IN; }
 "Nat"           { yylval.sval = strdup(yytext); return TYPE_INT; }
 "Float"         { yylval.sval = strdup(yytext); return TYPE_FLOAT; }
 "Bool"          { yylval.sval = strdup(yytext); return TYPE_BOOL; }
@@ -58,6 +48,7 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 "."             { return DOT; }
 "="             { return ASSIGN; }
 ";;"            { return SEMICOLON; }
+","             { return COMMA; }
 
 "("             { return LPAREN; }
 ")"             { return RPAREN; }
@@ -70,6 +61,13 @@ DECIMAL     {DIGITO}+\.{DIGITO}+
 {ENTERO}        { yylval.sval = strdup(yytext); return INT_LIT; }
 {ID}            { yylval.sval = strdup(yytext); return ID; }
 
-.               { fprintf(stderr,"Error léxico en línea %d: Caracter inesperado '%s'\n",yylineno,yytext); }
+"-"{ENTERO}               { fprintf(stderr,"No se permiten enteros negativos \n",yylineno,yytext); exit(1);}
+
+"-"{ENTERO}               { fprintf(stderr,"No se permiten decimales negativos \n",yylineno,yytext); exit(1);}
+
+
+"#"               { fprintf(stderr,"Error lexico en linea %d: El comentario '%s'se hace con /* \n",yylineno,yytext); exit(1);}
+
+.               { fprintf(stderr,"Error lexico en linea %d: Caracter inesperado '%s'\n",yylineno,yytext); exit(1);}
 
 %%

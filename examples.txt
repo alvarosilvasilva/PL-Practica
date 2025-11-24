@@ -1,44 +1,45 @@
-eval succ(pred(succ(00))) ;;
+eval succ(pred(succ(0))) ;;
+
 eval isZero(pred(1)) ;;
 
-if isZero(0) then 100 else 200 ;;
+if isZero(10 - 10 ) then 100 else 200 ;;
 
 
 if isZero(5) then 0 else if isZero(pred(1)) then 1 else 2 ;;
 
 
-if isZero(10 - 10) then succ(9) else pred(5) ;;
+if isZero(0) then succ(9) else pred(5) ;;
 
 def identidad = lambda.x:Nat. x ;;
+
 eval identidad 5 ;;
 
 def siempreDiez = lambda.x:Nat. 10 ;;
+
 eval siempreDiez 99 ;;
 
 def fib = lambda.n:Nat. 
-    if isZero(n) 
-    then 0 
-    else if isZero(pred(n)) 
+    if isZero(pred(n)) 
          then 1 
          else fib(pred(n)) + fib(pred(pred(n))) ;;
 
 eval fib 10 ;;
+
+
+
+def r(x:Nat, y:Nat) = x + y ;;
+
+eval r 10 20 ;;
+
+
 
 def sumatoria = lambda.n:Nat. 
     if isZero(n) then 0 else n + sumatoria(pred(n)) ;;
 
 eval sumatoria 5 ;;
 
-/*hola*/
+let x:Nat = 10 in x + 5 ;;
 
 
-
-#errores
-
-pred(0);;
-
-isZero(isZero(0));;
-
-x:Nat = 3.0;;
-
+let x
 

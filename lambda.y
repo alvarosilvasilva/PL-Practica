@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 /* --- VARIABLES GLOBALES --- */
 char* lista_argumentos[100];
@@ -14,28 +15,32 @@ extern char* yytext;
 void yyerror(const char *s);
 
 /* --- FUNCIONES AUXILIARES --- */
+char* concat(int count, ...) {
+    va_list ap;
+    int len = 0;
+    va_start(ap, count);
+    for(int i = 0; i < count; i++) {
+        char* s = va_arg(ap, char*);
+        if(s) len += strlen(s);
+    }
+    va_end(ap);
 
-char* unir(const char* s1, const char* s2) {
-    char* resultado = malloc(strlen(s1) + strlen(s2) + 1); 
-    if (resultado == NULL) { fprintf(stderr, "Error de memoria\n"); exit(1); }
-    strcpy(resultado, s1);
-    strcat(resultado, s2);
-    return resultado;
+    char* res = malloc(len + 1);
+    if (!res) { fprintf(stderr, "Error de memoria\n"); exit(1); }
+    res[0] = '\0';
+
+    va_start(ap, count);
+    for(int i = 0; i < count; i++) {
+        char* s = va_arg(ap, char*);
+        if(s) strcat(res, s);
+    }
+    va_end(ap);
+    return res;
 }
 
-char* unir3(const char* s1, const char* s2, const char* s3) {
-    char* resultado = malloc(strlen(s1) + strlen(s2) + strlen(s3) + 1);
-    if (resultado == NULL) { fprintf(stderr, "Error de memoria\n"); exit(1); }
-    strcpy(resultado, s1);
-    strcat(resultado, s2);
-    strcat(resultado, s3);
-    return resultado;
-}
+char* unir3(const char* s1, const char* s2, const char* s3) { return concat(3, s1, s2, s3); }
 
-void limpiar_args() {
-    contador_args = 0;
-}
-
+void limpiar_args() { contador_args = 0; }
 void agregar_arg(char* nombre) {
     if (contador_args < 100) {
         lista_argumentos[contador_args] = strdup(nombre); 
@@ -44,189 +49,201 @@ void agregar_arg(char* nombre) {
 }
 %}
 
-/* --- ESTRUCTURA DE DATOS --- */
-%union {
-    char* sval; 
-}
+%union { char* sval; }
 
-/* --- TOKENS --- */
 %token <sval> ID FLOAT_LIT INT_LIT TYPE_INT TYPE_FLOAT TYPE_BOOL SUCC PRED ISZERO
-%token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON 
+%token DEF EVAL LAMBDA ARROW COLON DOT ASSIGN SEMICOLON LET IN COMMA
 %token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
-/* --- TIPOS DE NO-TERMINALES --- */
-%type <sval> tipo expresion termino cuerpo_lambda ifelse funcion_anonima
+%type <sval> tipo expresion termino cuerpo_lambda ifelse funcion_anonima let_exp
 
-/* --- PRECEDENCIA --- */
+/* PRECEDENCIA */
 %right ARROW
+%nonassoc LET IN IF THEN ELSE 
 %left PLUS MINUS
 %left MULT DIV
 %left LPAREN RPAREN
 
 %%
 
-/* ========================================================================== */
-/* GRAMÁTICA                                                                  */
-/* ========================================================================== */
+programa: lista_sentencias ;
 
-programa:
-    lista_sentencias
-    ;
-
-lista_sentencias:
-    sentencia
-    | lista_sentencias sentencia
-    ;
+lista_sentencias: sentencia | lista_sentencias sentencia ;
 
 sentencia:
     definicion
     | evaluacion
     | definicion_var
-    /* Regla para expresiones sueltas (incluyendo IFs sueltos) */
-    /* Aquí es el único lugar donde imprimimos expresiones que no son definiciones */
-    | expresion SEMICOLON 
-    {   
-        printf("print(%s)\n", $1);
-    }
+    | expresion SEMICOLON { printf("%s\n", $1); free($1); }
     ;
 
-/* --- DEFINICIÓN GLOBAL DE FUNCIÓN (def f = ...) --- */
+/* Argumentos */
+parametro: ID COLON tipo { agregar_arg($1); } ;
+lista_parametros: parametro | parametro COMMA lista_parametros ;
+
 definicion:
-    DEF ID ASSIGN { limpiar_args(); } cuerpo_lambda SEMICOLON
+    /* Estilo Lambda Clasico: def f = lambda x... */
+    DEF ID ASSIGN cuerpo_lambda SEMICOLON
     {
-        printf("# Funcion generada\n");
         if (contador_args > 0) {
             printf("def %s(", $2);
             for (int i = contador_args - 1; i >= 0; i--) {
                 printf("%s", lista_argumentos[i]);
-                if (i > 0) printf(", "); 
+                if (i > 0) printf(", ");
             }
-            printf("):\n");
-            printf("    return %s\n\n", $5); 
-        } 
-        else {
-            printf("%s = %s\n\n", $2, $5);
+            printf("):\n    return %s\n\n", $4); 
+            free($4);
+        } else {
+            printf("%s = %s\n\n", $2, $4);
+            free($4);
         }
+        limpiar_args(); 
+    }
+    /* Estilo C/Python: def f(x:T) = ... */
+    | DEF ID LPAREN { limpiar_args(); } lista_parametros RPAREN ASSIGN expresion SEMICOLON
+    {
+        printf("def %s(", $2);
+        for (int i = 0; i < contador_args; i++) {
+            printf("%s", lista_argumentos[i]);
+            if (i < contador_args - 1) printf(", ");
+        }
+        printf("):\n    return %s\n\n", $8);
+        free($8);
     }
     ;
 
-/* --- ASIGNACIÓN GLOBAL --- */
+/* REGLA CORREGIDA Y UNIFICADA */
 definicion_var:
-    ID COLON tipo ASSIGN expresion SEMICOLON
+    ID COLON TYPE_INT ASSIGN expresion SEMICOLON
     {
-        if (strcmp($3, "Nat") == 0 && strchr($5, '.') != NULL) {
-            fprintf(stderr, "Error de Tipos: Asignacion de decimal a Nat en variable '%s'.\n", $1);
-            YYABORT;
+        
+
+        if (strchr($5, '.') != NULL) {
+            fprintf(stderr, "Error de Tipos: Asignación de Float a Nat en '%s' (Linea %d)\n", $1, yylineno);
+            YYERROR;
+        }
+
+        if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0) {
+            fprintf(stderr, "Error de Tipos: Asignación de Booleano (True/False) a Nat en '%s' (Linea %d)\n", $1, yylineno);
+            YYERROR;
         }
         
         printf("%s = %s\n\n", $1, $5); 
+        
+    }
+    | ID COLON TYPE_FLOAT ASSIGN expresion SEMICOLON
+    {
+        if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0 || strstr($5, "==") != NULL) {
+             fprintf(stderr, "Error de Tipos: Asignación de Booleano a Float en '%s' (Linea %d).\n", $1, yylineno);
+             YYERROR;
+        }
+        printf("%s = %s\n\n", $1, $5);
+    }
+    | ID COLON TYPE_BOOL ASSIGN expresion SEMICOLON
+    {
+        if (strstr($5, "==") == NULL && strcasecmp($5, "True") != 0 && strcasecmp($5, "False") != 0) {
+            fprintf(stderr, "Error de Tipos: Asignacion de No Booleano a Bool en variable '%s' (Linea %d).\n", $1, yylineno);
+            YYERROR;
+        }
+        
+        printf("%s = %s\n\n", $1, $5);
     }
     ;
 
-/* --- CUERPO DE DEFINICIONES --- */
 cuerpo_lambda:
     LAMBDA ID COLON tipo DOT cuerpo_lambda { agregar_arg($2); $$ = $6; }
     | expresion { $$ = $1; }
     ;
 
 evaluacion:
-    EVAL expresion SEMICOLON
-    {
-        printf("print(%s)\n", $2);
-    }
+    EVAL expresion SEMICOLON { printf("%s\n", $2); free($2); }
     ;
 
-/* --- CONDICIONAL TERNARIO --- */
-/* IMPORTANTE: Esto devuelve un string, NO imprime nada.
-   Usa 'expresion' en las ramas, no 'sentencia'. */
 ifelse: 
     IF expresion THEN expresion ELSE expresion 
+    { $$ = concat(7, "(", $4, " if ", $2, " else ",$6, ")"); }
+    ;
+
+let_exp:
+    LET ID COLON tipo ASSIGN expresion IN expresion
     {
-        $$ = unir3("(", unir3($4, " if ", unir3($2, " else ", $6)), ")");
+        /* (lambda id: body)(val) */
+
+        $$ = concat(6, $2 , "=", $6, "\n", $8, "\n");
     }
     ;
 
-/* --- FUNCIONES ANÓNIMAS (LAMBDAS EN LÍNEA) --- */
-/* Permite usar lambda dentro de un IF o asignación */
 funcion_anonima:
-    /* Coincide con: lambda.x:Nat. cuerpo */
     LAMBDA ID COLON tipo DOT expresion
-    {
-        /* Traduce a Python: (lambda x: cuerpo) */
-        char* cabecera = $2;
-        char* cuerpo = unir(":=", $6);
-        
-        /* Paréntesis importantes para proteger la precedencia */
-        $$ = unir3("(", unir(cabecera, cuerpo), ")");
-        
-        free(cabecera); free(cuerpo);
-    }
+    { $$ = concat(5, "(lambda ", $2, ": ", $6, ")"); }
     ;
 
-/* --- EXPRESIONES --- */
 expresion:
-    termino                     { $$ = $1; }
-    | expresion PLUS expresion  { $$ = unir3($1, " + ", $3); }
+    termino  
+    | termino COLON tipo { $$ = $1; }
+    | expresion PLUS expresion { $$ = unir3($1, " + ", $3); }
     | expresion MINUS expresion { $$ = unir3($1, " - ", $3); }
-    | expresion MULT expresion  { $$ = unir3($1, " * ", $3); }
-    | expresion DIV expresion   { $$ = unir3($1, " / ", $3); }
-    
-    | expresion termino         { 
-        $$ = unir3(unir($1, "("), $2, ")");
-    }
-    
-    | ifelse                    { $$ = $1; }
-
-    /* ASIGNACIÓN EN LÍNEA (WALRUS :=) */
-    | ID COLON tipo ASSIGN expresion 
-    {
-        
-        $$ = unir3("(", unir3($1, " := ", $5), ")");
-    }
+    | expresion MULT expresion { $$ = unir3($1, " * ", $3); }
+    | expresion DIV expresion { 
+        if(strcmp($3, "0") == 0 || strcmp($3, "0.0") == 0) {
+            fprintf(stderr, "Error de Ejecución: División por cero (Linea %d)\n", yylineno);
+            YYERROR;
+        }
+        $$ = unir3($1, " / ", $3); }
+    | expresion termino { $$ = concat(4, $1, "(", $2, ")"); }
+    | ifelse { $$ = $1; }
+    | let_exp { $$ = $1; } 
     ;
 
 termino:
-    ID                          { $$ = $1; }
-    | INT_LIT                   { $$ = $1; }
-    | FLOAT_LIT                 { $$ = $1; }
-    | LPAREN expresion RPAREN   { $$ = unir3("(", $2, ")"); }
+    ID { $$ = $1; }
+    | INT_LIT { $$ = $1; }
+    | FLOAT_LIT { $$ = $1; }
+    | LPAREN expresion RPAREN { $$ = concat(3, "(", $2, ")"); }
+    | funcion_anonima { $$ = $1; }
+    | SUCC LPAREN expresion RPAREN { $$ = concat(3, "(", $3, " + 1)"); }
     
-    /* Añadimos funciones anónimas como término válido */
-    | funcion_anonima           { $$ = $1; }
+    | PRED LPAREN expresion RPAREN { 
+        if (strchr($3, '.') != NULL) {
+            fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Float (Linea %d)\n", yylineno);
+            YYERROR;
+        }
+        if (strcmp($3, "True") == 0 || strcmp($3, "False") == 0) {
+            fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Bool (Linea %d)\n", yylineno);
+            YYERROR;
+        }
 
-    /* Funciones primitivas */
-    | SUCC LPAREN expresion RPAREN 
-    {
-        $$ = unir3("(", unir3($3, " + ", "1"), ")");
-    }
-    | PRED LPAREN expresion RPAREN 
-    {
-        if(strcmp($3, "0")==0){
-            fprintf(stderr, "Error: PRED no puede aplicarse a 0 (Linea %d)\n", yylineno);
-            YYABORT;
+        if (strcmp($3, "0") == 0) {
+           $$ = concat(3, "(", $3, " )");
+        }else{
+            $$ = concat(3, "(", $3, " - 1)");
         }
-        $$ = unir3("(", unir3($3, " - ", "1"), ")");
+       
     }
-    | ISZERO LPAREN expresion RPAREN
-    {
-        if (strstr($3, "==") != NULL) {
-            fprintf(stderr, "Error de Tipos: isZero espera un Numero, pero recibió una expresión Booleana (Linea %d)\n", yylineno);
-            YYABORT;
+
+    | ISZERO LPAREN expresion RPAREN {
+        if (strchr($3, '.') != NULL) {
+            fprintf(stderr, "Error de Tipos: isZero no puede aplicarse a un Float (Linea %d)\n", yylineno);
+            YYERROR;
         }
-        $$ = unir3("(", unir3($3, " == ", "0"), ")");
+        /* isZero no tiene sentido en booleanos */
+        if (strcmp($3, "True") == 0 || strcmp($3, "False") == 0) {
+            fprintf(stderr, "Error de Tipos: isZero no puede aplicarse a un Bool (Linea %d)\n", yylineno);
+            YYERROR;
+        }
+        $$ = concat(3, "(", $3, " == 0)"); 
     }
     ; 
 
-/* --- TIPOS --- */
 tipo:
-    TYPE_INT             { $$ = $1; }
-    | TYPE_BOOL          { $$ = $1; }
-    | TYPE_FLOAT         { $$ = $1; }
+    TYPE_INT | TYPE_BOOL | TYPE_FLOAT 
     | LPAREN tipo RPAREN { $$ = $2; }
-    | tipo ARROW tipo    { $$ = unir3($1, " -> ", $3); }
+    | tipo ARROW tipo { $$ = concat(3, $1, " -> ", $3); }
     ;
 
 %%
+
+/* --- CÓDIGO C --- */
 
 extern FILE *yyin;
 
@@ -238,18 +255,25 @@ void yyerror(const char *s) {
 int main(int argc, char **argv) {
     printf("import math\n");
     printf("from functools import reduce\n\n");
+    printf("# Codigo generado autolambda\n\n");
 
     yylineno = 1;
+
     if (argc > 1) {
         yyin = fopen(argv[1], "r");
-        if (!yyin) { perror(argv[1]); return 1; }
+        if (!yyin) {
+            perror(argv[1]);
+            return 1;
+        }
     } else {
         yyin = stdin;
     }
 
     int res = yyparse();
 
-    if (yyin != stdin) fclose(yyin);
+    if (yyin != stdin) {
+        fclose(yyin);
+    }
     
     return res;
 }
