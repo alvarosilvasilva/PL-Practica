@@ -58,7 +58,7 @@ void agregar_arg(char* nombre) {
 %token DEF EVAL LAMBDA COLON DOT ASSIGN SEMICOLON LET IN COMMA
 %token LPAREN RPAREN PLUS MINUS MULT DIV IF THEN ELSE
 
-%type <sval> tipo expresion termino cuerpo_lambda ifelse lambda_aux let_exp parametro lista_parametros
+%type <sval> tipo expresion termino cuerpo_lambda ifelse  let_exp parametro lista_parametros
 
 /*preferencia de operadores*/
 %nonassoc LET IN IF THEN ELSE 
@@ -150,7 +150,7 @@ definicion_var:
             YYABORT;
         }
         if (strcasecmp($5, "True") == 0 || strcasecmp($5, "False") == 0 || strstr($5, "==") != NULL) {
-            fprintf(stderr, "Error de Tipos: Asignación de Booleano a Nat en '%s' (Linea %d)\n", yylineno);
+            fprintf(stderr, "Error de Tipos: Asignación de Booleano a Nat en '%s' (Linea %d)\n", $1, yylineno);
             YYABORT;
         }
         fprintf(out,"%s = %s\n\n", $1, $5); 
@@ -245,20 +245,6 @@ let_exp:
     }
     ;
 
-/* lambda auxiliar */
-lambda_aux:
-    /* lambda. x:Tipo. x+1 */
-    LAMBDA ID COLON tipo DOT expresion
-    { $$ = concat(5, "(lambda ", $2, ": ", $6, ")"); }
-    
-    /* expresion mal formada */
-    | LAMBDA ID COLON tipo error
-    {
-        fprintf(stderr, "Error Sintactico: Lambda mal formada. Falta el punto '.' despues del tipo (Linea %d)\n", yylineno);
-        YYABORT;
-    }
-    ;
-
 /* operaciones y terminos */
 expresion:
     termino 
@@ -291,7 +277,6 @@ termino:
         YYABORT;
     }
 
-    | lambda_aux { $$ = $1; }
     
 
     | SUCC LPAREN expresion RPAREN {

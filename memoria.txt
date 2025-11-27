@@ -1,0 +1,126 @@
+Transpilador de Lambda cálculo tipado a Python
+
+Álvaro Silva Silva
+David M. Barbosa Rodríguez
+
+El objetivo principal de la practica es realizar un transpilador de Lambda cálculo tipado a Python, generando
+como salida codigo ejecutable.
+
+Implementamos un analizador lexico con Flex y un analizador sintáctico con Bison.
+Ademas Implementamos varios controles de errores que cubran:
+caracteres invalidos, estructuras mal formadas , incompatibilidad Nat/Float/Bool...
+
+Ficheros que componen la practica:
+
+- lambda.l      : analizador léxico (Flex). 
+- lambda.y      : analizador sintáctico (Bison). 
+- Makefile      : Script de compilación automática.
+- examples.txt  : Fichero de prueba con casos de éxito 
+- errores.txt   : Fichero de prueba diseñado para testear el control de errores.
+- salida.py     : Archivo generado automáticamente con el código Python resultante.
+- memoria.txt   : Memoria propia.
+
+
+
+Se implementado un Makefile para simplificar su compilación. Realizando un make simple (make) se compilara y ejecutara el archivo examples.txt, ademas se guardara todo el archivo modificado en salida.py.
+
+Cabe destacar que si encuentra un error se creara el archivo salida.py pero se quedara vacio
+
+
+Lambda.l: 
+
+  Es el encargado en comprender y definir los tokens posteriormente procesados por el analizador sintáctico.
+
+  Comentarios: Detecta el inicio /* y entra en un estado exclusivo COMENTARIO. Durante este estado, traduce el contenido para imprimirlo precedido de # (formato Python) y vuelve al estado inicial al encontrar */.
+
+  Espacios en blanco: Capta espacios, tabuladores y saltos de línea [ \t\r\n]+. No se procesan ni generan tokens (se ignoran).
+
+  Keywords: Capta palabras clave específicas de la estructura (def, eval, let, in) y de control (if, then, else, lambda.). Se procesan devolviendo su token correspondiente (ej: RETURN DEF).
+
+  Tipos de Datos: Capta Nat, Float y Bool. Se procesan devolviendo el token de tipo (ej: TYPE_INT) y, crucialmente, se guarda el texto capturado (strdup) en yylval para su uso semántico.
+
+  Delimitadores: Capta paréntesis (), comas ,, puntos . y puntos y coma dobles ;; (fin de sentencia). Se devuelven como tokens simples.
+
+  Aritmética: Capta los operadores matemáticos +, -, *, / devolviendo sus respectivos tokens.
+
+  Valores Numéricos e IDs: Capta las macros {DECIMAL}, {ENTERO} e {ID} definidas al principio. Se procesan devolviendo el token específico (FLOAT_LIT, INT_LIT, ID) y almacenando el valor del texto para la generación de código.
+
+  Control de Errores:
+
+    Negativos: Capta un guion seguido de un entero -{ENTERO}. Lanza un error explícito y detiene la ejecución, ya que el lenguaje no permite negativos.
+
+    Comentarios Erróneos: Capta el carácter #. Lanza un error indicando que los comentarios deben ser con /*.
+
+
+
+
+
+Lambda.y:
+
+  Funciones auxiliares: para facilitar la implementacion de la gramatica se han creadro 3 funciones auxiliares
+    concat: permite unir cadenas de texto dinámicamente. Esto es vital porque Bison propaga el código generado desde las hojas (números/variables) hacia la raíz del árbol.
+
+    Des-currificacion: mediante limpiar_args y agregar_arg que actuan como pilas temporales, conseguimos deshacer funciones anidadas.
+
+  lista_sentencias: Es la regla raíz recursiva que permite al compilador procesar un archivo completo 
+  con múltiples líneas de código en lugar de detenerse tras la primera instrucción
+
+  sentencias:Actúa como el "distribuidor" principal de la gramática. Determina qué tipo de 
+  instrucción se está procesando en la línea actual y delega en la regla específica.
+
+
+  A. DEF: Definiciones Globales 
+    Gestiona la creación de funciones y variables globales. Es el punto donde el 
+    cálculo lambda se traduce a sintaxis de Python.
+    - Lógica de "Des-currificación": 
+      1. Si encuentra una definición estilo Lambda (`def f = lambda x. lambda y...`), 
+          utiliza una regla recursiva (`cuerpo_lambda`) para acumular los argumentos 
+          en una pila global (`lista_argumentos`).
+      2. Si encuentra una definición estilo C (`def f(x:T)...`), llena la pila directamente.
+    - Generación: Al final de la regla, con todos los argumentos recolectados, genera 
+      una única cabecera Python `def nombre(arg1, arg2):` en lugar de funciones anidadas.
+
+  B. EVAL: Evaluaciones (Punto de Entrada)
+    Instrucción para ejecutar código y visualizar resultados.
+    - Detecta el token `EVAL` y desciende a la regla `expresion` donde se analizara cada caso en funcion de lo que tenga que evaluar.
+    - Acción: Toma el código generado por la expresión matemática (ej: `fib(10)`) y 
+      lo envuelve en una llamada `print(...)` de Python.
+
+  C. LAMBDA: Funciones y Recursividad
+    El token `LAMBDA` se maneja en dos contextos para soportar la recursividad:
+    1. En Definiciones (`cuerpo_lambda`): Regla recursiva por la derecha. Permite 
+        procesar cadenas infinitas de lambdas (`lambda x. lambda y. ...`) necesarias 
+        para la des-currificación mencionada en el punto A.
+    
+  D. Expresiones y Tipado 
+    Todas las reglas superiores descienden finalmente a `expresion` y `termino`.
+    Aquí se gestionan:
+    - Operadores aritméticos con su precedencia correcta.
+    - Estructuras `IF-THEN-ELSE` (traducidas a operador ternario Python).
+    - Estructuras `LET-IN` (traducidas simulando asignación).
+    - Primitivas (`succ`, `pred`, `isZero`).
+
+
+
+
+Errores:
+
+  Errores lexicos
+    Números Negativos: Se detectan patrones como -{ENTERO} explícitamente para lanzar un error y detener la compilación, forzando el uso exclusivo de números naturales.
+
+    Comentarios Incorrectos: Se avisa al usuario si intenta usar # (estilo Python) en el código fuente, requiriendo el uso de /* ... */.
+
+    Cualquier otro caracter que no este en nuestro lenguaje saltara como un error.
+
+  Errores Sintacticos 
+    Haciendo uso del token especial error de Bison, capturamos estructuras mal formadas para dar mensajes descriptivos en lugar de un fallo genérico.
+
+    Controlamos casos como: definiciones de función sin cuerpo, estructuras if a las que les falta el then o el else, expresiones let incompletas y paréntesis no balanceados. Los diferentes tipos se pueden ver en el lambda.y comentados
+
+  Errores Semánticos y previos a la ejecución
+    Validación de Tipos: Se bloquea la asignación de tipos incorrectos (ej. x:Nat = 3.5 o y:Bool = 10).
+
+    Primitivas: Se impide aplicar pred, succ o isZero a valores que no sean Naturales (como Booleanos o Flotantes). Específicamente, se lanza un error fatal si se intenta calcular el predecesor de cero (pred(0)), ya que no existe en los Naturales.
+
+    División por Cero: Se detecta estáticamente si el divisor es 0 o 0.0 antes de generar el código.
+
