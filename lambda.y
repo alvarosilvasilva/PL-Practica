@@ -69,11 +69,12 @@ void agregar_arg(char* nombre) {
 %%
 
 /* GRAMÁTICA PRINCIPAL */
-
 programa: lista_sentencias ;
 
+/* recursividad para multiples sentencias */
 lista_sentencias: sentencia | lista_sentencias sentencia ;
 
+/* sentencias: definicion, evaluacion, definicion de variable o error */
 sentencia:
     definicion
     | evaluacion
@@ -100,6 +101,7 @@ lista_parametros: parametro | parametro COMMA lista_parametros ;
 
 /* funciones */
 definicion:
+
     /* def f = lambda x... */
     DEF ID ASSIGN { limpiar_args(); } cuerpo_lambda SEMICOLON
     {
@@ -118,6 +120,7 @@ definicion:
         }
         limpiar_args();/*liberar memoria */
     }
+
     /* 2. def f(x:T) =...*/
     | DEF ID LPAREN { limpiar_args(); } lista_parametros RPAREN ASSIGN expresion SEMICOLON
     {
@@ -141,8 +144,8 @@ definicion:
 
 /* definicion de variables */
 definicion_var:
-    /* x:Nat = 10;; */
 
+    /* x:Nat = 10;; */
     ID COLON TYPE_INT ASSIGN expresion SEMICOLON
     {
         if (strchr($5, '.') != NULL) {
@@ -155,6 +158,7 @@ definicion_var:
         }
         fprintf(out,"%s = %s\n\n", $1, $5); 
     }
+
     /* x:Float = 10.0;; */
     | ID COLON TYPE_FLOAT ASSIGN expresion SEMICOLON
     {
@@ -164,6 +168,7 @@ definicion_var:
         }
         fprintf(out,"%s = %s\n\n", $1, $5);
     }
+
     /* x:Bool = True;; */
     | ID COLON TYPE_BOOL ASSIGN expresion SEMICOLON
     {
@@ -172,12 +177,14 @@ definicion_var:
             fprintf(stderr, "Error de Tipos: Asignacion de No Booleano a Bool en variable '%s' (Linea %d).\n", $1, yylineno);
             YYABORT;
         }
+
         fprintf(out,"%s = %s\n\n", $1, $5);
     }
     ;
 
 /* lambda */
 cuerpo_lambda:
+
     /* lambda. x:Tipo. cuerpo */
     LAMBDA ID COLON tipo DOT cuerpo_lambda { agregar_arg($2); $$ = $6; }
     | expresion { $$ = $1; }
@@ -185,6 +192,7 @@ cuerpo_lambda:
 
 /* eval */
 evaluacion:
+
     /* eval r 10;; */
     EVAL expresion SEMICOLON { fprintf(out,"print(%s)\n\n", $2); free($2); }
     
@@ -198,6 +206,7 @@ evaluacion:
 
 /* if-then-else */
 ifelse: 
+
     /* if True then 1 else 0 */
     IF expresion THEN expresion ELSE expresion 
     { $$ = concat(7, "(", $4, " if ", $2, " else ",$6, ")"); }
@@ -219,6 +228,7 @@ ifelse:
 
 /* let */
 let_exp:
+
     /*let x.Nat = 10 in x+1 */
     LET ID COLON tipo ASSIGN expresion IN expresion
     {
@@ -231,12 +241,14 @@ let_exp:
         fprintf(stderr, "Error Sintactico: 'let' incompleto. Falta ': Tipo' tras '%s' (Linea %d)\n", $2, yylineno);
         YYABORT; 
     }
+
     /* falta cuerpo, asignacion */
     | LET ID COLON tipo error
     {
         fprintf(stderr, "Error Sintactico: 'let' incompleto. Falta '=' despues del tipo (Linea %d)\n", yylineno);
         YYABORT;
     }
+
     /* falta cuerpo, expresion */
     | LET ID COLON tipo ASSIGN expresion error
     {
@@ -248,24 +260,34 @@ let_exp:
 /* operaciones y terminos */
 expresion:
     termino 
+
     | termino COLON tipo { $$ = $1; }
+
     | expresion PLUS expresion { $$ = concat(3,$1, " + ", $3); }
+    
     | expresion MINUS expresion { $$ = concat(3,$1, " - ", $3); }
+
     | expresion MULT expresion { $$ = concat(3,$1, " * ", $3); }
+
     | expresion DIV expresion { 
         if(strcmp($3, "0") == 0 || strcmp($3, "0.0") == 0) {
             fprintf(stderr, "Error de Ejecución: División por cero (Linea %d)\n", yylineno);
             YYABORT;
         }
         $$ = concat(3, $1, " / ", $3); }
+
     | expresion termino { $$ = concat(4, $1, "(", $2, ")"); }
+
     | ifelse { $$ = $1; }
+
     | let_exp { $$ = $1; } 
     ;
 
 termino:
     ID { $$ = $1; }
+
     | INT_LIT { $$ = $1; }
+
     | FLOAT_LIT { $$ = $1; }
     
     | LPAREN expresion RPAREN { $$ = concat(3, "(", $2, ")"); }
@@ -277,21 +299,21 @@ termino:
         YYABORT;
     }
 
-    
-
+    /* succ(1) */
     | SUCC LPAREN expresion RPAREN {
     
         if (strchr($3, '.') != NULL) {
-            fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Float (Linea %d)\n", yylineno);
+            fprintf(stderr, "Error de Tipos: SUCC no puede aplicarse a un Float (Linea %d)\n", yylineno);
             YYABORT;
         }
         if (strcasecmp($3, "True") == 0 || strcasecmp($3, "False") == 0 || strstr($3, "==") != NULL) {
-            fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Bool (Linea %d)\n", yylineno);
+            fprintf(stderr, "Error de Tipos: SUCC no puede aplicarse a un Bool (Linea %d)\n", yylineno);
             YYABORT;
         }
         $$ = concat(3, "(", $3, " + 1)");
         }
 
+    /* pred(1) */
     | PRED LPAREN expresion RPAREN { 
         if (strchr($3, '.') != NULL) {
             fprintf(stderr, "Error de Tipos: PRED no puede aplicarse a un Float (Linea %d)\n", yylineno);
@@ -308,6 +330,7 @@ termino:
         $$ = concat(3, "(", $3, " - 1)");
     }
 
+    /* isZero(1) */
     | ISZERO LPAREN expresion RPAREN {
         if (strchr($3, '.') != NULL) {
             fprintf(stderr, "Error de Tipos: isZero no puede aplicarse a un Float (Linea %d)\n", yylineno);

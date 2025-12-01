@@ -1,0 +1,55 @@
+
+/* isZero no puede recibir algo que no sea un Nat */
+/*eval isZero(True) ;;*/
+
+/* Pred no puede recibir algo que no sea un Nat */
+/*eval pred(True) ;;*/
+
+/* Succ no puede recibir algo que no sea un Nat */
+/* eval succ(True) ;; */
+
+/* x:Nat = 3.0 no puede ser un Float/Bool */
+/* x:Nat = 3.0 ;; */
+
+/* x:Float = 3 no puede ser un Nat/Bool */
+/* x:Float = 3 ;; */
+
+/* x:Bool = 3 no puede ser un Nat ni Float/Nat */
+/* x:Bool = 3 ;; */
+
+/* no se puede definir negativos */
+/* -1 */
+
+/* comentarios mal escritos */
+/* # hola */
+
+/* no reconocido por el lexico */
+/* 6t& */
+
+/* let mal formado falta tipo */
+/* let x */
+
+/* let mal formado falta assignacion */
+/* let :Nat = */
+
+/* let :Nat = x */
+/* if pero falta el else */
+/* if 1 then 2 */
+
+/* if solo */
+/* if 1 */
+
+/* lambda mal formado */
+/* lambda x:Nat;; */
+
+/* def mal formado */
+/*def 3*/ 
+
+/* eval mal formado */
+/* eval */
+
+/* solo un parentesis */
+/* (8 */
+
+/*vacio*/
+;;

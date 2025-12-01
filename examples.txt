@@ -34,8 +34,11 @@ def fib = lambda.n:Nat.
         else fib(pred(n)) + fib(pred(pred(n)));;
 
 
-eval fib 10 ;;
+def factorial = lambda.n:Nat. if isZero(n) then 1 else n * factorial(pred(n)) ;;
+eval factorial 5 ;;
 
+
+eval fib 10 ;;
 
 
 def r(x:Nat) = x/pred(x) ;;
@@ -49,3 +52,13 @@ def sumatoria = lambda.n:Nat.
 eval sumatoria 5 ;;
 
 let x:Nat = 10 in x + 5 ;;
+
+def promedio(a:Nat) = (a +3) / 2 ;;
+eval promedio(10) ;;
+
+def mitad(x:Float) = x / 2.0 ;;
+eval mitad(5.0) ;;
+
+
+eval 1 + 2 * 5 ;;
+

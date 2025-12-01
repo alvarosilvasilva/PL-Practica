@@ -1,5 +1,6 @@
 FUENTE = lambda
 PRUEBA = examples.txt
+PRUEBA2 = example_errores.txt
 LIB = lfl
 
 all: compile run
@@ -11,6 +12,9 @@ compile:
 
 run:
 	./$(FUENTE) < $(PRUEBA)
+
+run2:
+	./$(FUENTE) < $(PRUEBA2)
 
 clean:
 	rm -f $(FUENTE) lex.yy.c $(FUENTE).tab.c $(FUENTE).tab.h

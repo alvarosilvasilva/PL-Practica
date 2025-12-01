@@ -23,6 +23,8 @@ Ficheros que componen la practica:
 
 
 Se implementado un Makefile para simplificar su compilación. Realizando un make simple (make) se compilara y ejecutara el archivo examples.txt, ademas se guardara todo el archivo modificado en salida.py.
+Con la opción de make run2 (previamente habiendo hecho make) se ejecutará un archivo con diferentes errores, para probar algun error en especifico descomentar la linea del error y volver a compilar con make run2.
+
 
 Cabe destacar que si encuentra un error se creara el archivo salida.py pero se quedara vacio
 
